@@ -1,206 +1,512 @@
-import React, { useEffect, useState } from 'react';
-import Navbar from '../components/Navbar';
-import { getMyTimetable, getRequestsInbox, decideSwapRequest, findSwap, requestSwap } from '../services/api';
-import { Calendar, CheckCircle, XCircle, Search, ArrowRightLeft } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Calendar, Mail, History, Search, LogOut } from 'lucide-react';
+import axios from 'axios';
 
 export default function EmployeeDashboard() {
-  const [timetable, setTimetable] = useState(null);
-  const [inbox, setInbox] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState('schedule');
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  
+  // Auth state
+  const [token, setToken] = useState('');
+  const [role, setRole] = useState('');
+  const [employeeId, setEmployeeId] = useState('');
+  
+  // My Schedule tab
+  const [schedule, setSchedule] = useState(null);
+  const [employeeInfo, setEmployeeInfo] = useState(null);
+  
+  // Find Swap tab
+  const [findSwapForm, setFindSwapForm] = useState({ date: '', shift_type: '' });
+  const [availableSwaps, setAvailableSwaps] = useState([]);
+  const [swapSearchDone, setSwapSearchDone] = useState(false);
+  
+  // Inbox tab
+  const [inboxRequests, setInboxRequests] = useState([]);
+  
+  // History tab
+  const [historyData, setHistoryData] = useState([]);
 
-  // Swap specific state
-  const [isSearching, setIsSearching] = useState(false);
-  const [swapCandidates, setSwapCandidates] = useState([]);
-  const [swapData, setSwapData] = useState({ target_date: '', wanted_shift: '' });
-  const [myIntentId, setMyIntentId] = useState(null);
+  // Auth check on mount
+  useEffect(() => {
+    const storedToken = localStorage.getItem('token');
+    const storedRole = localStorage.getItem('role');
+    const storedEmployeeId = localStorage.getItem('employee_id');
+    
+    if (!storedToken) {
+      navigate('/');
+      return;
+    }
+    
+    if (storedRole !== 'employee') {
+      navigate('/');
+      return;
+    }
+    
+    setToken(storedToken);
+    setRole(storedRole);
+    setEmployeeId(storedEmployeeId);
+  }, [navigate]);
 
-  const fetchData = async () => {
+  // Load My Schedule on tab change
+  useEffect(() => {
+    if (activeTab === 'schedule' && token) {
+      loadSchedule();
+    }
+  }, [activeTab, token]);
+
+  // Load Inbox on tab change
+  useEffect(() => {
+    if (activeTab === 'inbox' && token) {
+      loadInbox();
+    }
+  }, [activeTab, token]);
+
+  // Load History on tab change
+  useEffect(() => {
+    if (activeTab === 'history' && token) {
+      loadHistory();
+    }
+  }, [activeTab, token]);
+
+  const getAxiosInstance = () => {
+    return axios.create({
+      baseURL: 'http://localhost:8000',
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    });
+  };
+
+  const loadSchedule = async () => {
+    setLoading(true);
+    setError('');
     try {
-      setLoading(true);
-      const [ttRes, inboxRes] = await Promise.all([
-        getMyTimetable(),
-        getRequestsInbox()
-      ]);
-      setTimetable(ttRes.data);
-      setInbox(inboxRes.data);
+      const api = getAxiosInstance();
+      const res = await api.get('/api/v1/employee/timetable');
+      setSchedule(res.data.timetable);
+      setEmployeeInfo(res.data.employee_info);
     } catch (err) {
-      setError('Could not load dashboard data. Are you approved by admin?');
+      setError(err.response?.data?.detail || 'Failed to load schedule');
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const handleDecide = async (id, decision) => {
-    try {
-      await decideSwapRequest(id, decision);
-      alert(`Request ${decision.toLowerCase()} successfully.`);
-      fetchData(); // refresh inbox & timetable
-    } catch (err) {
-      alert(err.response?.data?.detail || 'Error processing request');
-    }
+  const handleFindSwapChange = (e) => {
+    setFindSwapForm({ ...findSwapForm, [e.target.name]: e.target.value });
   };
 
-  const handeFindSwapSearch = async (e) => {
+  const findSwaps = async (e) => {
     e.preventDefault();
+    setLoading(true);
+    setError('');
+    setSuccess('');
+    
+    if (!findSwapForm.date || !findSwapForm.shift_type) {
+      setError('Please fill in all fields');
+      setLoading(false);
+      return;
+    }
+
     try {
-      setIsSearching(true);
-      const res = await findSwap({
-        swap_type: 'DAILY',
-        target_date: swapData.target_date,
-        wanted_shift: swapData.wanted_shift
+      const api = getAxiosInstance();
+      const res = await api.post('/api/v1/swap/find', {
+        date: findSwapForm.date,
+        shift_type: findSwapForm.shift_type
       });
-      setMyIntentId(res.data.my_intent_id);
-      setSwapCandidates(res.data.matches);
+      setAvailableSwaps(res.data.swaps || []);
+      setSwapSearchDone(true);
     } catch (err) {
-      alert(err.response?.data?.detail || 'Error finding swaps');
+      setError(err.response?.data?.detail || 'Failed to find swaps');
     } finally {
-      setIsSearching(false);
+      setLoading(false);
     }
   };
 
-  const handleSendRequest = async (otherIntentId) => {
+  const requestSwap = async (targetEmployeeId) => {
+    setError('');
+    setSuccess('');
+    setLoading(true);
+
     try {
-      await requestSwap({
-        my_intent_id: myIntentId,
-        other_intent_id: otherIntentId,
-        expires_in_minutes: 120
+      const api = getAxiosInstance();
+      await api.post('/api/v1/swap/request', {
+        target_employee_id: targetEmployeeId,
+        date: findSwapForm.date,
+        shift_type: findSwapForm.shift_type
       });
-      alert('Swap requested successfully! Wait for their approval.');
-      setSwapCandidates([]);
+      setSuccess('Swap request sent successfully!');
+      setAvailableSwaps(availableSwaps.filter(s => s.employee_id !== targetEmployeeId));
     } catch (err) {
-      alert(err.response?.data?.detail || 'Error sending request');
+      setError(err.response?.data?.detail || 'Failed to request swap');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadInbox = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const api = getAxiosInstance();
+      const res = await api.get('/api/v1/swap/inbox');
+      setInboxRequests(res.data.requests || []);
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to load inbox');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const respondToRequest = async (requestId, decision) => {
+    setError('');
+    setSuccess('');
+    setLoading(true);
+
+    try {
+      const api = getAxiosInstance();
+      await api.post(`/api/v1/swap/requests/${requestId}/decision`, {
+        decision: decision
+      });
+      setSuccess(`Request ${decision}!`);
+      await loadInbox();
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to respond to request');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadHistory = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const api = getAxiosInstance();
+      const res = await api.get('/api/v1/swap/history');
+      setHistoryData(res.data.history || []);
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to load history');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('role');
+    localStorage.removeItem('employee_id');
+    navigate('/');
+  };
+
+  if (!token) {
+    return null;
+  }
+
+  const getDayName = (dateStr) => {
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const date = new Date(dateStr);
+    return days[date.getDay()];
+  };
+
+  const getStatusBadgeColor = (status) => {
+    switch (status?.toLowerCase()) {
+      case 'approved': return '#10b981';
+      case 'rejected': return '#ef4444';
+      case 'pending': return '#f59e0b';
+      default: return '#a1a1aa';
     }
   };
 
   return (
     <div className="app-container">
-      <Navbar />
-      
-      <main className="main-content">
-        <h1 style={{ marginBottom: '2rem' }}>Welcome to your Dashboard</h1>
-        
-        {loading && <p>Loading data...</p>}
-        {error && <p className="error-message" style={{ background: 'var(--danger-color)', color: 'white', padding: '1rem', borderRadius: 'var(--border-radius)' }}>{error}</p>}
+      {/* Navbar */}
+      <nav className="navbar">
+        <div className="navbar-brand">SwapShift</div>
+        <div className="navbar-nav">
+          <span style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Welcome, {employeeId}</span>
+          <button 
+            onClick={handleLogout}
+            className="btn btn-outline"
+            style={{ padding: '0.5rem 1rem', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+          >
+            <LogOut size={16} /> Logout
+          </button>
+        </div>
+      </nav>
 
-        {!loading && !error && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr)', gap: '2rem', alignItems: 'start' }}>
-            
-            {/* Left Column - Timetable & Find Swap */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-              
-              <div className="card">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
-                  <Calendar size={24} color="var(--accent-color)" />
-                  <h2 style={{ margin: 0 }}>My Timetable (This Week)</h2>
-                </div>
-                
-                {timetable?.rows ? (
-                  <div style={{ overflowX: 'auto' }}>
+      <div className="main-content">
+        {/* Tab Navigation */}
+        <div className="tab-navigation">
+          <button
+            className={`tab-btn ${activeTab === 'schedule' ? 'active' : ''}`}
+            onClick={() => setActiveTab('schedule')}
+          >
+            <Calendar size={18} /> My Schedule
+          </button>
+          <button
+            className={`tab-btn ${activeTab === 'find' ? 'active' : ''}`}
+            onClick={() => setActiveTab('find')}
+          >
+            <Search size={18} /> Find Swap
+          </button>
+          <button
+            className={`tab-btn ${activeTab === 'inbox' ? 'active' : ''}`}
+            onClick={() => setActiveTab('inbox')}
+          >
+            <Mail size={18} /> Inbox
+          </button>
+          <button
+            className={`tab-btn ${activeTab === 'history' ? 'active' : ''}`}
+            onClick={() => setActiveTab('history')}
+          >
+            <History size={18} /> History
+          </button>
+        </div>
+
+        {/* Error & Success Messages */}
+        {error && <div className="error-message">{error}</div>}
+        {success && <div className="success-message">{success}</div>}
+
+        {/* Tab Content */}
+        {activeTab === 'schedule' && (
+          <div className="tab-content">
+            {loading ? (
+              <p style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>Loading schedule...</p>
+            ) : (
+              <>
+                {employeeInfo && (
+                  <div className="card" style={{ marginBottom: '1.5rem' }}>
+                    <h3>{employeeInfo.name}</h3>
+                    <p style={{ color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>
+                      Department: {employeeInfo.department}
+                    </p>
+                    <p style={{ color: 'var(--text-secondary)' }}>
+                      Designation: {employeeInfo.designation}
+                    </p>
+                  </div>
+                )}
+                {schedule && (
+                  <div className="card" style={{ overflowX: 'auto' }}>
                     <table className="data-table">
                       <thead>
                         <tr>
-                          <th>Date</th>
-                          <th>Shift</th>
+                          {Object.keys(schedule).map((day) => (
+                            <th key={day}>{getDayName(day)} ({day})</th>
+                          ))}
                         </tr>
                       </thead>
                       <tbody>
-                        {timetable.rows.map(r => (
-                          <tr key={r.date}>
-                            <td style={{ fontWeight: 500 }}>{r.date}</td>
-                            <td>
-                              <span className={`badge ${r.shift_name === 'OFF' ? 'danger' : 'success'}`}>
-                                {r.shift_name}
-                              </span>
+                        <tr>
+                          {Object.values(schedule).map((shift, idx) => (
+                            <td key={idx}>
+                              {shift ? (
+                                <>
+                                  <strong>{shift.shift_type}</strong>
+                                  <br />
+                                  <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+                                    {shift.start_time} - {shift.end_time}
+                                  </span>
+                                </>
+                              ) : (
+                                <span style={{ color: 'var(--text-tertiary)' }}>Day Off</span>
+                              )}
                             </td>
-                          </tr>
-                        ))}
+                          ))}
+                        </tr>
                       </tbody>
                     </table>
                   </div>
-                ) : (
-                  <p>No timetable uploaded for you yet.</p>
                 )}
-              </div>
+              </>
+            )}
+          </div>
+        )}
 
-              <div className="card">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
-                  <Search size={24} color="var(--accent-color)" />
-                  <h2 style={{ margin: 0 }}>Find a Swap (Daily)</h2>
+        {activeTab === 'find' && (
+          <div className="tab-content">
+            <div className="card" style={{ marginBottom: '1.5rem' }}>
+              <h3 style={{ marginBottom: '1rem' }}>Find Available Swaps</h3>
+              <form onSubmit={findSwaps}>
+                <div className="input-group">
+                  <label className="input-label">Date</label>
+                  <input
+                    type="date"
+                    name="date"
+                    className="input-field"
+                    value={findSwapForm.date}
+                    onChange={handleFindSwapChange}
+                    required
+                  />
                 </div>
-                <form onSubmit={handeFindSwapSearch} style={{ display: 'flex', gap: '1rem', alignItems: 'flex-end', marginBottom: '1.5rem' }}>
-                  <div className="input-group" style={{ marginBottom: 0, flex: 1 }}>
-                    <label className="input-label">Date to Swap</label>
-                    <input type="date" className="input-field" value={swapData.target_date} onChange={e => setSwapData({...swapData, target_date: e.target.value})} required />
-                  </div>
-                  <div className="input-group" style={{ marginBottom: 0, flex: 1 }}>
-                    <label className="input-label">Wanted Shift</label>
-                    <input
-                      type="text"
-                      className="input-field"
-                      placeholder="e.g. 1:00 AM or OFF"
-                      value={swapData.wanted_shift}
-                      onChange={e => setSwapData({...swapData, wanted_shift: e.target.value})}
-                      required
-                    />
-                  </div>
-                  <button type="submit" className="btn btn-primary" disabled={isSearching}>{isSearching ? '...' : 'Search'}</button>
-                </form>
-
-                {swapCandidates.length > 0 && (
-                  <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '1.5rem' }}>
-                    <h3>Matches ({swapCandidates.length})</h3>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
-                      {swapCandidates.map(c => (
-                        <div key={c.other_intent_id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem', background: 'var(--bg-secondary)', borderRadius: 'var(--border-radius)' }}>
-                          <div>
-                            <div style={{ fontWeight: 600 }}>Colleague wants: {c.my_wanted_payload.shift}</div>
-                            <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>They can offer their {c.other_current_payload.shift} shift</div>
-                          </div>
-                          <button onClick={() => handleSendRequest(c.other_intent_id)} className="btn btn-secondary">Request Swap</button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
+                <div className="input-group">
+                  <label className="input-label">Shift Type</label>
+                  <select
+                    name="shift_type"
+                    className="input-field"
+                    value={findSwapForm.shift_type}
+                    onChange={handleFindSwapChange}
+                    required
+                  >
+                    <option value="">Select shift type</option>
+                    <option value="morning">Morning</option>
+                    <option value="evening">Evening</option>
+                    <option value="night">Night</option>
+                  </select>
+                </div>
+                <button type="submit" className="btn btn-primary" disabled={loading} style={{ width: '100%' }}>
+                  {loading ? 'Searching...' : 'Find Available Swaps'}
+                </button>
+              </form>
             </div>
 
-            {/* Right Column - Inbox */}
-            <div className="card">
-               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
-                  <ArrowRightLeft size={24} color="var(--accent-color)" />
-                  <h2 style={{ margin: 0 }}>Swap Inbox</h2>
-                </div>
-                
-                {inbox.length === 0 ? (
-                  <p style={{ textAlign: 'center', color: 'var(--text-tertiary)', padding: '2rem 0' }}>No pending requests.</p>
+            {swapSearchDone && (
+              <div>
+                {availableSwaps.length === 0 ? (
+                  <p style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>
+                    No available swaps found
+                  </p>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                    {inbox.map(req => (
-                      <div key={req.id} style={{ border: '1px solid var(--border-color)', borderRadius: 'var(--border-radius)', padding: '1rem' }}>
-                        <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>Expire: {new Date(req.expires_at).toLocaleString()}</div>
-                        <div style={{ fontWeight: 500, marginBottom: '1rem' }}>
-                          Swap requested for {req.start_date} <br/> Type: {req.swap_type}
-                        </div>
-                        <div style={{ display: 'flex', gap: '0.5rem' }}>
-                          <button onClick={() => handleDecide(req.id, 'ACCEPT')} className="btn btn-primary" style={{ flex: 1, backgroundColor: 'var(--success-color)' }}><CheckCircle size={16}/> Accept</button>
-                          <button onClick={() => handleDecide(req.id, 'REJECT')} className="btn btn-danger" style={{ flex: 1 }}><XCircle size={16}/> Reject</button>
+                  <div style={{ display: 'grid', gap: '1rem' }}>
+                    {availableSwaps.map((swap) => (
+                      <div key={swap.employee_id} className="card">
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+                          <div style={{ flex: 1, minWidth: '200px' }}>
+                            <h4 style={{ marginBottom: '0.5rem' }}>{swap.employee_name}</h4>
+                            <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', marginBottom: '0.25rem' }}>
+                              Shift: {swap.shift_type} ({swap.start_time} - {swap.end_time})
+                            </p>
+                            <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
+                              Department: {swap.department}
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => requestSwap(swap.employee_id)}
+                            className="btn btn-primary"
+                            disabled={loading}
+                            style={{ whiteSpace: 'nowrap' }}
+                          >
+                            Request Swap
+                          </button>
                         </div>
                       </div>
                     ))}
                   </div>
                 )}
-            </div>
-
+              </div>
+            )}
           </div>
         )}
-      </main>
+
+        {activeTab === 'inbox' && (
+          <div className="tab-content">
+            {loading ? (
+              <p style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>Loading requests...</p>
+            ) : (
+              <>
+                {inboxRequests.length === 0 ? (
+                  <p style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>
+                    No swap requests in your inbox
+                  </p>
+                ) : (
+                  <div style={{ display: 'grid', gap: '1rem' }}>
+                    {inboxRequests.map((request) => (
+                      <div key={request.request_id} className="card">
+                        <div>
+                          <h4 style={{ marginBottom: '0.5rem' }}>{request.requester_name}</h4>
+                          <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', marginBottom: '0.25rem' }}>
+                            Date: {request.date}
+                          </p>
+                          <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', marginBottom: '1rem' }}>
+                            Shift: {request.shift_type}
+                          </p>
+                          <div style={{ display: 'flex', gap: '0.5rem' }}>
+                            <button
+                              onClick={() => respondToRequest(request.request_id, 'approved')}
+                              className="btn"
+                              style={{
+                                backgroundColor: 'var(--success-color)',
+                                color: 'white',
+                                flex: 1
+                              }}
+                              disabled={loading}
+                            >
+                              Accept
+                            </button>
+                            <button
+                              onClick={() => respondToRequest(request.request_id, 'rejected')}
+                              className="btn"
+                              style={{
+                                backgroundColor: 'var(--danger-color)',
+                                color: 'white',
+                                flex: 1
+                              }}
+                              disabled={loading}
+                            >
+                              Decline
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'history' && (
+          <div className="tab-content">
+            {loading ? (
+              <p style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>Loading history...</p>
+            ) : (
+              <div className="card" style={{ overflowX: 'auto' }}>
+                {historyData.length === 0 ? (
+                  <p style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>
+                    No swap history yet
+                  </p>
+                ) : (
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>Date</th>
+                        <th>Shift</th>
+                        <th>With</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {historyData.map((item) => (
+                        <tr key={item.request_id}>
+                          <td>{item.date}</td>
+                          <td>{item.shift_type}</td>
+                          <td>{item.employee_name}</td>
+                          <td>
+                            <span
+                              className="badge"
+                              style={{
+                                backgroundColor: getStatusBadgeColor(item.status),
+                                color: 'white',
+                                padding: '0.25rem 0.75rem'
+                              }}
+                            >
+                              {item.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

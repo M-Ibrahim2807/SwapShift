@@ -14,9 +14,10 @@ class EmployeeRepository:
     def get_by_pk(self, pk: int) -> Employee | None:
         return self.db.scalar(select(Employee).where(Employee.id == pk))
 
-    def create(self, employee_id: str, contact_number: str, contact_hash: str) -> Employee:
+    def create(self, employee_id: str, contact_number: str, contact_hash: str, name: str = None) -> Employee:
         employee = Employee(
             employee_id=employee_id,
+            name=name,
             contact_number=contact_number,
             contact_hash=contact_hash,
             is_active=False,

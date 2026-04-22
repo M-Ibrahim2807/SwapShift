@@ -64,6 +64,20 @@ class SwapRepository:
         )
         return list(self.db.scalars(stmt))
 
+    def get_open_by_scope_for_employee(
+        self, employee_pk: int, swap_type: str, target_date: date | None, week_start: date | None
+    ) -> SwapIntent | None:
+        stmt = select(SwapIntent).where(
+            and_(
+                SwapIntent.employee_id == employee_pk,
+                SwapIntent.swap_type == swap_type,
+                SwapIntent.status == "OPEN",
+                SwapIntent.target_date == target_date,
+                SwapIntent.week_start == week_start,
+            )
+        )
+        return self.db.scalar(stmt)
+
     def get_by_id(self, intent_id: int) -> SwapIntent | None:
         return self.db.scalar(select(SwapIntent).where(SwapIntent.id == intent_id))
 

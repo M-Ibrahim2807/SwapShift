@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
-from app.core.exceptions import ValidationException
+from app.core.exceptions import AuthException, ValidationException
 from app.dependencies import get_current_admin, get_db
 from app.schemas.employee_schema import AdminLoginIn, EmployeeOut, TokenOut
 from app.schemas.timetable_schema import UploadResultOut
@@ -15,7 +15,10 @@ router = APIRouter()
 @router.post("/login", response_model=TokenOut)
 async def admin_login(payload: AdminLoginIn, db: Session = Depends(get_db)):
     service = AuthService(db)
-    return service.admin_login(payload)
+    try:
+        return service.admin_login(payload)
+    except AuthException as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
 
 
 @router.post("/timetable/upload", response_model=UploadResultOut)

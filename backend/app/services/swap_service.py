@@ -29,19 +29,30 @@ class SwapService:
     def create_request(self, requester, my_intent_id: int, other_intent_id: int, expires_in_minutes: int):
         my_intent = self.swap_repo.get_by_id(my_intent_id)
         other_intent = self.swap_repo.get_by_id(other_intent_id)
-        if not my_intent or not other_intent:
-            raise ValidationException("Invalid intent id(s)")
+        
+        if not my_intent:
+            raise ValidationException("Your swap request is no longer valid. Please search again.")
+        if not other_intent:
+            raise ValidationException("The other person is no longer available for swap. They may have accepted another request.")
+        
         if my_intent.employee_id != requester.id:
             raise ValidationException("my_intent_id does not belong to current employee")
         if other_intent.employee_id == requester.id:
             raise ValidationException("Cannot send request to self")
-        if my_intent.status != "OPEN" or other_intent.status != "OPEN":
-            raise ValidationException("One of the intents is already closed")
+        
+        if my_intent.status != "OPEN":
+            raise ValidationException("Your swap request is no longer active. Please search again.")
+        if other_intent.status != "OPEN":
+            raise ValidationException("The other person is no longer available. They may have accepted another swap.")
 
         if my_intent.swap_type != other_intent.swap_type:
             raise ValidationException("Intent swap types do not match")
         if self.request_repo.has_active_pair(my_intent.id, other_intent.id):
             raise ValidationException("A pending request already exists for this swap pair")
+        if self.request_repo.has_active_for_intent(my_intent.id):
+            raise ValidationException("Your slot already has a pending swap request")
+        if self.request_repo.has_active_for_intent(other_intent.id):
+            raise ValidationException("The other person's slot already has a pending swap request")
 
         start_date, end_date = self._derive_date_range(my_intent)
 
@@ -97,6 +108,8 @@ class SwapService:
         receiver_intent = self.swap_repo.get_by_id(req.receiver_intent_id)
         if requester_intent is None or receiver_intent is None:
             raise ValidationException("Intents not found for request")
+        if requester_intent.status != "OPEN" or receiver_intent.status != "OPEN":
+            raise ValidationException("One of the swap slots is no longer available")
 
         self._apply_schedule_swap(req, requester_intent, receiver_intent)
 

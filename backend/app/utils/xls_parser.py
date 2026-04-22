@@ -66,8 +66,8 @@ def _convert_shift_value(value: str) -> str:
     for pattern in TIME_PATTERNS:
         try:
             parsed = datetime.strptime(normalized, pattern)
-            shifted = parsed + timedelta(hours=10)
-            return shifted.strftime("%-I:%M %p")
+            # Don't adjust time here - adjustment happens on frontend for display
+            return parsed.strftime("%-I:%M %p")
         except ValueError:
             continue
 

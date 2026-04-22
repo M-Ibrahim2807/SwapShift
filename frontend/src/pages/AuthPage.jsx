@@ -59,22 +59,20 @@ export default function AuthPage() {
   return (
     <div className="auth-wrapper">
       <div className="auth-card">
-        <h1 style={{ textAlign: 'center', marginBottom: '1.5rem', fontWeight: 700 }}>SwapShift</h1>
+        <h1>SwapShift</h1>
         
         {/* Role Toggle */}
-        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '2rem', background: 'var(--bg-secondary)', padding: '0.25rem', borderRadius: 'var(--border-radius)' }}>
+        <div className="auth-toggle">
           <button 
             type="button"
-            className="btn" 
-            style={{ flex: 1, backgroundColor: !isAdmin ? 'var(--bg-tertiary)' : 'transparent', color: !isAdmin ? 'var(--text-primary)' : 'var(--text-secondary)', boxShadow: !isAdmin ? 'var(--shadow-sm)' : 'none' }}
+            className={`btn ${!isAdmin ? 'active' : 'inactive'}`}
             onClick={() => { setIsAdmin(false); setError(''); }}
           >
             <User size={16} /> Employee
           </button>
           <button 
             type="button" 
-            className="btn" 
-            style={{ flex: 1, backgroundColor: isAdmin ? 'var(--bg-tertiary)' : 'transparent', color: isAdmin ? 'var(--text-primary)' : 'var(--text-secondary)', boxShadow: isAdmin ? 'var(--shadow-sm)' : 'none' }}
+            className={`btn ${isAdmin ? 'active' : 'inactive'}`}
             onClick={() => { setIsAdmin(true); setError(''); }}
           >
             <Shield size={16} /> Admin
@@ -137,7 +135,7 @@ export default function AuthPage() {
             {' '}
             <button 
               type="button" 
-              style={{ background: 'none', border: 'none', color: 'var(--text-primary)', fontWeight: 600, cursor: 'pointer', outline: 'none' }}
+              className="auth-toggle-link"
               onClick={() => setIsLogin(!isLogin)}
             >
               {isLogin ? 'Register now.' : 'Login here.'}

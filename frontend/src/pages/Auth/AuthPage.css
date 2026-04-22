@@ -1,0 +1,245 @@
+.auth-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 24px 16px;
+  background: #ebebed;
+}
+
+.auth-card {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  padding: 48px 40px 40px;
+  border-radius: 16px;
+  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.06);
+  width: 100%;
+  max-width: 480px;
+}
+
+.auth-title {
+  text-align: center;
+  font-size: clamp(32px, 5vw, 48px);
+  margin-bottom: 32px;
+  color: #000000;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.auth-toggle {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 28px;
+  background: #f3f4f6;
+  padding: 6px;
+  border-radius: 10px;
+}
+
+.toggle-btn {
+  flex: 1;
+  padding: 10px 12px;
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  font-weight: 500;
+  font-size: 16px;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.toggle-btn.active {
+  background: #ffffff;
+  color: #000000;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-label {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 8px;
+  letter-spacing: 0.01em;
+}
+
+.form-input {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 16px;
+  transition: all 0.2s ease;
+  background: #ffffff;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  box-sizing: border-box;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: #374151;
+  box-shadow: 0 0 0 3px rgba(55, 65, 81, 0.1);
+}
+
+.form-input-error {
+  border-color: #dc2626 !important;
+  background-color: #fef2f2;
+}
+
+.form-input-error:focus {
+  border-color: #dc2626 !important;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1);
+}
+
+.form-error {
+  display: block;
+  color: #dc2626;
+  font-size: 13px;
+  font-weight: 500;
+  margin-top: 6px;
+  letter-spacing: 0.01em;
+}
+
+.form-submit {
+  width: 100%;
+  padding: 14px 16px;
+  background: #000000;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-top: 24px;
+  font-size: 16px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+}
+
+.form-submit:hover:not(:disabled) {
+  background: #1f2937;
+  transform: translateY(-1px);
+}
+
+.form-submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.auth-footer {
+  text-align: center;
+  font-size: 14px;
+  color: #6b7280;
+  margin-top: 16px;
+}
+
+.link-btn {
+  background: none;
+  border: none;
+  color: #000000;
+  cursor: pointer;
+  font-weight: 700;
+  text-decoration: none;
+  padding: 0;
+  transition: all 0.2s ease;
+  font-size: inherit;
+}
+
+.link-btn:hover {
+  text-decoration: underline;
+  color: #374151;
+}
+
+@media (max-width: 768px) {
+  .auth-card {
+    padding: 40px 28px 32px;
+    border-radius: 14px;
+  }
+
+  .auth-title {
+    margin-bottom: 28px;
+  }
+
+  .toggle-btn {
+    font-size: 15px;
+    padding: 9px 12px;
+  }
+
+  .form-input {
+    font-size: 16px;
+    padding: 11px 13px;
+  }
+
+  .form-submit {
+    font-size: 15px;
+    padding: 13px 14px;
+  }
+}
+
+@media (max-width: 640px) {
+  .auth-page {
+    padding: 16px 12px;
+  }
+
+  .auth-card {
+    padding: 32px 20px 24px;
+    border-radius: 12px;
+    max-width: 100%;
+  }
+
+  .auth-title {
+    font-size: clamp(28px, 4vw, 36px);
+    margin-bottom: 24px;
+  }
+
+  .auth-toggle {
+    margin-bottom: 24px;
+    gap: 6px;
+    padding: 4px;
+  }
+
+  .toggle-btn {
+    font-size: 14px;
+    padding: 8px 10px;
+  }
+
+  .form-group {
+    margin-bottom: 14px;
+  }
+
+  .form-label {
+    font-size: 13px;
+    margin-bottom: 7px;
+  }
+
+  .form-input {
+    font-size: 16px;
+    padding: 11px 12px;
+    border-radius: 6px;
+  }
+
+  .form-submit {
+    font-size: 14px;
+    padding: 12px 12px;
+    margin-top: 20px;
+    border-radius: 6px;
+  }
+
+  .auth-footer {
+    font-size: 13px;
+    margin-top: 14px;
+  }
+}
+
+  .form-submit {
+    font-size: 18px;
+    padding: 12px;
+  }
+
+  .auth-footer {
+    font-size: 14px;
+  }
+}

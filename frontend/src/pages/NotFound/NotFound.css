@@ -1,0 +1,58 @@
+.not-found-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 20px;
+  background: var(--color-bg);
+}
+
+.not-found-content {
+  text-align: center;
+}
+
+.not-found-title {
+  font-size: 120px;
+  font-weight: 700;
+  color: #e5e7eb;
+  margin: 0;
+  line-height: 1;
+  animation: bounce 2s infinite;
+}
+
+.not-found-content h2 {
+  font-size: 28px;
+  color: var(--color-primary);
+  margin-bottom: 12px;
+}
+
+.not-found-content p {
+  font-size: 16px;
+  color: var(--color-text-muted);
+  margin-bottom: 32px;
+}
+
+.not-found-button {
+  padding: 12px 32px;
+  background: var(--color-primary);
+  color: var(--color-white);
+  border: none;
+  border-radius: var(--border-radius-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+  font-size: 14px;
+}
+
+.not-found-button:hover {
+  background: var(--color-primary-hover);
+}
+
+@keyframes bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}

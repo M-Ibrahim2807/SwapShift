@@ -2,18 +2,21 @@ from sqlalchemy.orm import Session
 
 from app.core.exceptions import ValidationException
 from app.repositories.employee_repo import EmployeeRepository
+from app.repositories.request_repo import RequestRepository
 from app.repositories.swap_repo import SwapRepository
 from app.services.timetable_service import TimetableService
 from datetime import date as date_type
 from datetime import datetime
 
 from app.utils.shift_matcher import is_reciprocal_daily
+from app.utils.validators import canonicalize_shift_name
 
 
 class MatchingEngine:
     def __init__(self, db: Session):
         self.db = db
         self.swap_repo = SwapRepository(db)
+        self.request_repo = RequestRepository(db)
         self.employee_repo = EmployeeRepository(db)
         self.timetable_service = TimetableService(db)
 
@@ -36,7 +39,9 @@ class MatchingEngine:
         return self._build_multi_day(employee, payload.multi_day_requests)
 
     def _format_shift(self, hour: int, meridiem: str) -> str:
-        return f"{int(hour)}:00 {meridiem.upper()}"
+        if meridiem.upper() == "OFF":
+            return "OFF"
+        return canonicalize_shift_name(f"{int(hour)}:00 {meridiem.upper()}")
 
     def _current_week_dates(self, employee) -> list[date_type]:
         week = self.timetable_service.get_current_week_for_employee(employee)
@@ -81,10 +86,12 @@ class MatchingEngine:
         ]
 
         out = []
+        seen_employee_ids = set()
         for m in matches:
             emp = self.employee_repo.get_by_pk(m.employee_id)
             if emp is None:
                 continue
+            seen_employee_ids.add(emp.id)
             out.append(
                 {
                     "employee_id": emp.employee_id,
@@ -97,7 +104,75 @@ class MatchingEngine:
                 }
             )
 
+        slot_candidates = self._collect_slot_candidates(
+            requester=employee,
+            swap_type=swap_type,
+            target_date=target_date,
+            my_current=my_current,
+            my_wanted=my_wanted,
+            exclude_employee_ids=seen_employee_ids,
+        )
+        out.extend(slot_candidates)
+
         return my_intent, my_current, my_wanted, out
+
+    def _collect_slot_candidates(
+        self,
+        requester,
+        swap_type: str,
+        target_date: date_type,
+        my_current: dict,
+        my_wanted: dict,
+        exclude_employee_ids: set[int],
+    ) -> list[dict]:
+        out = []
+        wanted_shift = my_wanted["shift"]
+        for row in self.timetable_service.timetable_repo.get_all_shifts_for_date(target_date):
+            if row.employee_id == requester.id or row.employee_id in exclude_employee_ids:
+                continue
+            if canonicalize_shift_name(row.shift_name) != wanted_shift:
+                continue
+
+            emp = self.employee_repo.get_by_pk(row.employee_id)
+            if emp is None or not emp.is_active:
+                continue
+
+            other_intent = self.swap_repo.get_open_by_scope_for_employee(
+                employee_pk=emp.id,
+                swap_type=swap_type,
+                target_date=target_date,
+                week_start=None,
+            )
+            if other_intent is None:
+                other_intent = self.swap_repo.create_or_replace_intent(
+                    employee_pk=emp.id,
+                    swap_type=swap_type,
+                    current_payload={"date": str(target_date), "shift": row.shift_name},
+                    wanted_payload={"date": str(target_date), "shift": my_current["shift"]},
+                    target_date=target_date,
+                    week_start=None,
+                )
+                # For newly created slot candidates, don't skip based on active requests
+                # They were just created and should be shown
+            else:
+                # For existing intents (person already searched), skip if they have active requests
+                # They should handle those via their inbox instead
+                if self.request_repo.has_active_for_intent(other_intent.id):
+                    continue
+
+            out.append(
+                {
+                    "employee_id": emp.employee_id,
+                    "contact_number": emp.contact_number,
+                    "my_current_payload": my_current,
+                    "my_wanted_payload": my_wanted,
+                    "other_current_payload": other_intent.current_payload,
+                    "other_wanted_payload": other_intent.wanted_payload,
+                    "other_intent_id": other_intent.id,
+                }
+            )
+
+        return out
 
     def _build_single_day(self, employee, target_date: date_type, wanted_hour: int, wanted_meridiem: str):
         wanted_shift = self._format_shift(wanted_hour, wanted_meridiem)

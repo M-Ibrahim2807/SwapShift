@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field, model_validator
 
 SwapTypeLiteral = Literal["DAILY", "HOLIDAY"]
 DailyModeLiteral = Literal["SINGLE_DAY", "MULTI_DAY"]
-MeridiemLiteral = Literal["AM", "PM"]
+MeridiemLiteral = Literal["AM", "PM", "OFF"]
 
 
 class DailySwapItem(BaseModel):

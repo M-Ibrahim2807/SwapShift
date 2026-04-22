@@ -45,6 +45,18 @@ class RequestRepository:
         )
         return self.db.scalar(stmt) is not None
 
+    def has_active_for_intent(self, intent_id: int) -> bool:
+        stmt = select(ShiftRequest).where(
+            and_(
+                or_(
+                    ShiftRequest.requester_intent_id == intent_id,
+                    ShiftRequest.receiver_intent_id == intent_id,
+                ),
+                ShiftRequest.status == "PENDING",
+            )
+        )
+        return self.db.scalar(stmt) is not None
+
     def expire_due_requests(self, now_utc: datetime) -> int:
         stmt = select(ShiftRequest).where(
             and_(ShiftRequest.status == "PENDING", ShiftRequest.expires_at <= now_utc)

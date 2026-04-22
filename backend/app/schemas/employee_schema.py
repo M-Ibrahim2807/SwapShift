@@ -17,13 +17,13 @@ class RegisterOut(BaseModel):
 
 
 class LoginIn(BaseModel):
-    employee_id: str
+    employee_id: str = Field(min_length=2, max_length=50)
     password: str = Field(min_length=8, max_length=128)
 
 
 class AdminLoginIn(BaseModel):
-    username: str
-    password: str
+    username: str = Field(min_length=2, max_length=100)
+    password: str = Field(min_length=8, max_length=128)
 
 
 class TokenOut(BaseModel):

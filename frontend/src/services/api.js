@@ -1,62 +1,86 @@
 import axios from 'axios';
 
-const API_URL = 'http://localhost:8000/api/v1';
-
 const api = axios.create({
-  baseURL: API_URL,
-  headers: {
-    'Content-Type': 'application/json',
+  baseURL: 'http://localhost:8000',
+});
+
+// Request interceptor: attach token
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
   },
-});
+  (error) => Promise.reject(error)
+);
 
-// Request Interceptor: Attach token if exists
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
-
-// Response Interceptor: Handle auth errors globally
+// Response interceptor: handle 401
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response && error.response.status === 401) {
-      // Clear token on unauthorized
+    if (error.response?.status === 401) {
       localStorage.removeItem('token');
-      localStorage.removeItem('userRole');
-      window.location.href = '/auth';
+      localStorage.removeItem('role');
+      localStorage.removeItem('user');
+      window.location.href = '/';
     }
     return Promise.reject(error);
   }
 );
 
-// Auth endpoints
-export const loginEmployee = (data) => api.post('/employee/login', data);
-export const registerEmployee = (data) => api.post('/employee/register', data);
-export const loginAdmin = (data) => api.post('/admin/login', data);
+// EMPLOYEE APIs
+export const registerEmployee = (data) => 
+  api.post('/api/v1/employee/register', data);
 
-// Employee endpoints
-export const getMyTimetable = () => api.get('/employee/timetable');
-export const getRequestsInbox = () => api.get('/swap/inbox');
-export const getSwapHistory = () => api.get('/swap/history');
-export const findSwap = (data) => api.post('/swap/find', data);
-export const requestSwap = (data) => api.post('/swap/request', data);
-export const decideSwapRequest = (requestId, decision) =>
-  api.post(`/swap/requests/${requestId}/decision`, { decision });
+export const loginEmployee = (data) => 
+  api.post('/api/v1/employee/login', data);
 
-// Admin endpoints
-export const getPendingRegistrations = () => api.get('/admin/registration-requests');
-export const approveRegistration = (employeeId) => api.post(`/admin/registration-requests/${employeeId}/approve`);
-export const rejectRegistration = (employeeId) => api.post(`/admin/registration-requests/${employeeId}/reject`);
+export const getTimetable = () => 
+  api.get('/api/v1/employee/timetable');
 
-export const uploadTimetable = (file) => {
-  const formData = new FormData();
-  formData.append('file', file);
-  return api.post('/admin/timetable/upload', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  });
-};
+export const getAvailableShifts = (workDate) =>
+  api.get(`/api/v1/employee/timetable/available-shifts/${workDate}`);
+
+export const getEmployeeSummary = () =>
+  api.get('/api/v1/employee/summary');
+
+// ADMIN APIs
+export const loginAdmin = (data) => 
+  api.post('/api/v1/admin/login', data);
+
+export const uploadTimetable = (formData) =>
+  api.post('/api/v1/admin/timetable/upload', formData);
+
+export const getPendingRegistrations = () =>
+  api.get('/api/v1/admin/registration-requests');
+
+export const approveRegistration = (employee_id) =>
+  api.post(`/api/v1/admin/registration-requests/${employee_id}/approve`);
+
+export const rejectRegistration = (employee_id) =>
+  api.post(`/api/v1/admin/registration-requests/${employee_id}/reject`);
+
+// SWAP APIs
+export const findSwap = (data) =>
+  api.post('/api/v1/swap/find', data);
+
+export const requestSwap = (data) =>
+  api.post('/api/v1/swap/request', data);
+
+export const decideSwap = (request_id, decision) =>
+  api.post(`/api/v1/swap/requests/${request_id}/decision`, { decision });
+
+export const getSwapHistory = () =>
+  api.get('/api/v1/swap/history');
+
+export const getSwapInbox = () =>
+  api.get('/api/v1/swap/inbox');
+
+// HEALTH
+export const checkHealth = () =>
+  api.get('/health');
 
 export default api;
+

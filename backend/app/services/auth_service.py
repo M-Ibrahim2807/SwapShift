@@ -17,18 +17,19 @@ class AuthService:
     def login(self, payload: LoginIn) -> TokenOut:
         validate_password(payload.password)
         employee = self.employee_repo.get_by_employee_id(payload.employee_id)
-        if employee is None:
-            raise AuthException("Employee not found")
+        
+        # Use generic message for security (don't reveal if ID exists or not)
+        if employee is None or not verify_password(payload.password, employee.contact_hash):
+            raise AuthException("Invalid employee ID or password")
+        
         if not employee.is_active:
-            raise AuthException("Account is not active")
-        if not verify_password(payload.password, employee.contact_hash):
-            raise AuthException("Invalid credentials")
+            raise AuthException("Account is not active. Please contact administrator.")
 
         token = create_access_token(payload.employee_id, role="employee")
         return TokenOut(access_token=token)
 
     def admin_login(self, payload: AdminLoginIn) -> TokenOut:
         if payload.username != self.settings.admin_username or payload.password != self.settings.admin_password:
-            raise AuthException("Invalid admin credentials")
+            raise AuthException("Invalid username or password")
         token = create_access_token(payload.username, role="admin")
         return TokenOut(access_token=token)

@@ -55,3 +55,8 @@ class TimetableRepository:
             .order_by(Timetable.work_date.asc())
         )
         return list(self.db.scalars(stmt))
+
+    def get_all_shifts_for_date(self, work_date: date) -> list[Timetable]:
+        """Get all timetable rows for a specific date across all employees."""
+        stmt = select(Timetable).where(Timetable.work_date == work_date)
+        return list(self.db.scalars(stmt))

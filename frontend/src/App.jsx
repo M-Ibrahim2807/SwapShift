@@ -1,52 +1,47 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider, useAuth } from './context/AuthContext';
-import AuthPage from './pages/AuthPage';
+import { ToastProvider } from './context/ToastContext';
+import { AuthProvider } from './context/AuthContext';
+import { NotificationProvider } from './context/NotificationContext';
+import ProtectedRoute from './components/ProtectedRoute/ProtectedRoute';
 
-const PrivateRoute = ({ children, allowedRoles }) => {
-  const { isAuthenticated, role, loading } = useAuth();
-  
-  if (loading) return <div>Loading...</div>;
+// Pages
+import AuthPage from './pages/Auth/AuthPage';
+import PendingApproval from './pages/PendingApproval/PendingApproval';
+import EmployeeDashboard from './pages/EmployeeDashboard/EmployeeDashboard';
+import AdminDashboard from './pages/AdminDashboard/AdminDashboard';
+import NotFound from './pages/NotFound/NotFound';
 
-  if (!isAuthenticated) {
-    return <Navigate to="/auth" />;
-  }
-
-  if (allowedRoles && !allowedRoles.includes(role)) {
-    return <Navigate to="/" />; // Or unauthorized page
-  }
-
-  return children;
-};
-
-import EmployeeDashboard from './pages/EmployeeDashboard';
-import AdminDashboard from './pages/AdminDashboard';
-function App() {
+export default function App() {
   return (
-    <AuthProvider>
-      <Router>
-        <div className="app-container">
-          <Routes>
-            <Route path="/auth" element={<AuthPage />} />
-            
-            <Route path="/dashboard" element={
-              <PrivateRoute allowedRoles={['employee']}>
-                <EmployeeDashboard />
-              </PrivateRoute>
-            } />
-            
-            <Route path="/admin" element={
-              <PrivateRoute allowedRoles={['admin']}>
-                <AdminDashboard />
-              </PrivateRoute>
-            } />
-            
-            <Route path="/" element={<Navigate to="/auth" />} />
-          </Routes>
-        </div>
-      </Router>
-    </AuthProvider>
+    <Router>
+      <AuthProvider>
+        <ToastProvider>
+          <NotificationProvider>
+            <Routes>
+              <Route path="/" element={<AuthPage />} />
+              <Route path="/pending" element={<PendingApproval />} />
+              <Route 
+                path="/dashboard" 
+                element={
+                  <ProtectedRoute requiredRole="employee">
+                    <EmployeeDashboard />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/admin" 
+                element={
+                  <ProtectedRoute requiredRole="admin">
+                    <AdminDashboard />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </NotificationProvider>
+        </ToastProvider>
+      </AuthProvider>
+    </Router>
   );
 }
-
-export default App;

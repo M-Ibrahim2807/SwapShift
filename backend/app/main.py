@@ -68,3 +68,6 @@ async def health_check():
 
 
 app.include_router(api_router, prefix="/api/v1")
+
+# Alias for uvicorn
+api = app
