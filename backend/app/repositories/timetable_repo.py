@@ -3,6 +3,7 @@ from datetime import date
 from sqlalchemy import and_, delete, select
 from sqlalchemy.orm import Session
 
+from app.core.constants import TimetableSource
 from app.models.timetable import Timetable
 
 
@@ -17,21 +18,36 @@ class TimetableRepository:
             )
         )
 
-    def upsert_shift(self, employee_pk: int, work_date: date, shift_name: str) -> tuple[Timetable, bool]:
+    def upsert_shift(
+        self,
+        employee_pk: int,
+        work_date: date,
+        shift_name: str,
+        source: str,
+        preserve_manual: bool = False,
+    ) -> tuple[Timetable, str]:
         row = self.get_shift(employee_pk, work_date)
-        created = False
         if row is None:
-            row = Timetable(employee_id=employee_pk, work_date=work_date, shift_name=shift_name)
+            row = Timetable(employee_id=employee_pk, work_date=work_date, shift_name=shift_name, source=source)
             self.db.add(row)
-            created = True
-        else:
-            row.shift_name = shift_name
-            self.db.add(row)
-        self.db.flush()
-        return row, created
+            self.db.flush()
+            return row, "created"
 
-    def delete_all(self) -> None:
-        self.db.execute(delete(Timetable))
+        if preserve_manual and row.source == TimetableSource.MANUAL.value and source == TimetableSource.ADMIN.value:
+            return row, "skipped"
+
+        row.shift_name = shift_name
+        row.source = source
+        self.db.add(row)
+        self.db.flush()
+        return row, "updated"
+
+    def delete_all_by_source(self, source: str) -> None:
+        self.db.execute(delete(Timetable).where(Timetable.source == source))
+        self.db.flush()
+
+    def delete_all_for_employee(self, employee_pk: int) -> None:
+        self.db.execute(delete(Timetable).where(Timetable.employee_id == employee_pk))
         self.db.flush()
 
     def get_all_for_employee(self, employee_pk: int) -> list[Timetable]:
@@ -41,6 +57,12 @@ class TimetableRepository:
             .order_by(Timetable.work_date.asc())
         )
         return list(self.db.scalars(stmt))
+
+    def has_rows_with_source(self, employee_pk: int, source: str) -> bool:
+        stmt = select(Timetable.id).where(
+            and_(Timetable.employee_id == employee_pk, Timetable.source == source)
+        )
+        return self.db.scalar(stmt) is not None
 
     def get_range(self, employee_pk: int, start_date: date, end_date: date) -> list[Timetable]:
         stmt = (

@@ -5,7 +5,7 @@ from sqlalchemy import engine_from_config, pool
 
 from app.config import get_settings
 from app.database.base import Base
-from app.models import employee, shift_request, swap, swap_history, timetable  # noqa: F401
+from app.models import coverback, employee, shift_request, swap, swap_history, timetable  # noqa: F401
 
 config = context.config
 settings = get_settings()

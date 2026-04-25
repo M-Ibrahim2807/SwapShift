@@ -14,7 +14,7 @@ def test_daily_swap_accepts_and_prevents_duplicate_pending_requests(client):
     )
     upload = client.post(
         "/api/v1/admin/timetable/upload",
-        files={"file": ("week.xlsx", workbook, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+        files={"file": ("week.csv", workbook, "text/csv")},
         headers={"Authorization": f"Bearer {token}"},
     )
     assert upload.status_code == 200
@@ -37,25 +37,23 @@ def test_daily_swap_accepts_and_prevents_duplicate_pending_requests(client):
         headers={"Authorization": f"Bearer {emp1_token}"},
     )
     assert emp1_find.status_code == 200
-    my_intent_id = emp1_find.json()["my_intent_id"]
-
-    emp2_find = client.post(
-        "/api/v1/swap/find",
-        json={
-            "swap_type": "DAILY",
-            "daily_mode": "SINGLE_DAY",
-            "target_date": target_date,
-            "wanted_hour": 10,
-            "wanted_meridiem": "AM",
-        },
-        headers={"Authorization": f"Bearer {emp2_token}"},
-    )
-    assert emp2_find.status_code == 200
-    other_intent_id = emp2_find.json()["my_intent_id"]
+    matches = emp1_find.json()["matches"]
+    assert len(matches) == 1
+    candidate = matches[0]
+    assert candidate["employee_id"] == "EMP002"
+    assert candidate["requester_current_shift"] == "10:00 AM"
+    assert candidate["candidate_current_shift"] == "11:00 AM"
 
     create_request = client.post(
         "/api/v1/swap/request",
-        json={"my_intent_id": my_intent_id, "other_intent_id": other_intent_id, "expires_in_minutes": 60},
+        json={
+            "receiver_employee_id": candidate["employee_id"],
+            "swap_type": "DAILY",
+            "target_date": target_date,
+            "requester_current_shift": candidate["requester_current_shift"],
+            "receiver_current_shift": candidate["candidate_current_shift"],
+            "expires_in_minutes": 60,
+        },
         headers={"Authorization": f"Bearer {emp1_token}"},
     )
     assert create_request.status_code == 200
@@ -63,7 +61,14 @@ def test_daily_swap_accepts_and_prevents_duplicate_pending_requests(client):
 
     duplicate_request = client.post(
         "/api/v1/swap/request",
-        json={"my_intent_id": my_intent_id, "other_intent_id": other_intent_id, "expires_in_minutes": 60},
+        json={
+            "receiver_employee_id": candidate["employee_id"],
+            "swap_type": "DAILY",
+            "target_date": target_date,
+            "requester_current_shift": candidate["requester_current_shift"],
+            "receiver_current_shift": candidate["candidate_current_shift"],
+            "expires_in_minutes": 60,
+        },
         headers={"Authorization": f"Bearer {emp1_token}"},
     )
     assert duplicate_request.status_code == 400
@@ -104,7 +109,7 @@ def test_daily_swap_matches_even_when_timetable_uses_variant_time_formats(client
     )
     upload = client.post(
         "/api/v1/admin/timetable/upload",
-        files={"file": ("week.xlsx", workbook, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+        files={"file": ("week.csv", workbook, "text/csv")},
         headers={"Authorization": f"Bearer {token}"},
     )
     assert upload.status_code == 200
@@ -127,7 +132,8 @@ def test_daily_swap_matches_even_when_timetable_uses_variant_time_formats(client
         headers={"Authorization": f"Bearer {emp1_token}"},
     )
     assert emp1_find.status_code == 200
-    assert emp1_find.json()["matches"] == []
+    assert len(emp1_find.json()["matches"]) == 1
+    assert emp1_find.json()["matches"][0]["employee_id"] == "EMP002"
 
     emp2_find = client.post(
         "/api/v1/swap/find",
@@ -156,7 +162,7 @@ def test_find_swap_returns_slot_candidates_and_request_alerts_receiver_without_p
     )
     upload = client.post(
         "/api/v1/admin/timetable/upload",
-        files={"file": ("week.xlsx", workbook, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+        files={"file": ("week.csv", workbook, "text/csv")},
         headers={"Authorization": f"Bearer {token}"},
     )
     assert upload.status_code == 200
@@ -180,13 +186,19 @@ def test_find_swap_returns_slot_candidates_and_request_alerts_receiver_without_p
     )
     assert emp1_find.status_code == 200
     assert len(emp1_find.json()["matches"]) == 1
-
-    other_intent_id = emp1_find.json()["matches"][0]["other_intent_id"]
-    my_intent_id = emp1_find.json()["my_intent_id"]
+    candidate = emp1_find.json()["matches"][0]
+    assert candidate["employee_id"] == "EMP002"
 
     create_request = client.post(
         "/api/v1/swap/request",
-        json={"my_intent_id": my_intent_id, "other_intent_id": other_intent_id, "expires_in_minutes": 60},
+        json={
+            "receiver_employee_id": candidate["employee_id"],
+            "swap_type": "DAILY",
+            "target_date": target_date,
+            "requester_current_shift": candidate["requester_current_shift"],
+            "receiver_current_shift": candidate["candidate_current_shift"],
+            "expires_in_minutes": 60,
+        },
         headers={"Authorization": f"Bearer {emp1_token}"},
     )
     assert create_request.status_code == 200
@@ -194,3 +206,52 @@ def test_find_swap_returns_slot_candidates_and_request_alerts_receiver_without_p
     inbox = client.get("/api/v1/swap/inbox", headers={"Authorization": f"Bearer {emp2_token}"})
     assert inbox.status_code == 200
     assert len(inbox.json()) == 1
+
+
+def test_find_swap_requires_employee_timetable(client):
+    register_and_approve_employee(client, "EMP404", "923001114040")
+    emp_token = employee_token(client, "EMP404")
+
+    response = client.post(
+        "/api/v1/swap/find",
+        json={
+            "swap_type": "DAILY",
+            "daily_mode": "SINGLE_DAY",
+            "target_date": "2026-04-24",
+            "wanted_hour": 11,
+            "wanted_meridiem": "AM",
+        },
+        headers={"Authorization": f"Bearer {emp_token}"},
+    )
+    assert response.status_code == 400
+    assert "create your weekly timetable" in response.json()["detail"].lower()
+
+
+def test_holiday_swap_finds_any_working_candidate(client):
+    token = admin_token(client)
+    workbook = build_schedule_workbook(
+        {
+            "EMP001": ["HOLIDAY"] * 7,
+            "EMP002": ["9:00 AM"] * 7,
+        },
+        start_date=date(2026, 4, 24),
+    )
+    upload = client.post(
+        "/api/v1/admin/timetable/upload",
+        files={"file": ("week.csv", workbook, "text/csv")},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert upload.status_code == 200
+
+    register_and_approve_employee(client, "EMP001", "923001114041")
+    register_and_approve_employee(client, "EMP002", "923001114042")
+    emp1_token = employee_token(client, "EMP001")
+
+    response = client.post(
+        "/api/v1/swap/find",
+        json={"swap_type": "HOLIDAY", "target_date": "2026-04-24"},
+        headers={"Authorization": f"Bearer {emp1_token}"},
+    )
+    assert response.status_code == 200
+    assert len(response.json()["matches"]) == 1
+    assert response.json()["matches"][0]["candidate_current_shift"] == "9:00 AM"

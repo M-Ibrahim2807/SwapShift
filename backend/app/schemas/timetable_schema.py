@@ -1,21 +1,35 @@
 from datetime import date
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class TimetableRowOut(BaseModel):
     date: date
     shift_name: str
+    source: str
 
 
-class TimetableWeekOut(BaseModel):
+class TimetableStateOut(BaseModel):
     employee_id: str
-    week_start: date
-    week_end: date
+    has_timetable: bool
+    requires_manual_setup: bool
+    week_start: date | None
+    week_end: date | None
     rows: list[TimetableRowOut]
+    message: str | None = None
+
+
+class ManualTimetableRowIn(BaseModel):
+    date: date
+    shift_name: str = Field(min_length=1, max_length=20)
+
+
+class ManualTimetableUpsertIn(BaseModel):
+    rows: list[ManualTimetableRowIn]
 
 
 class UploadResultOut(BaseModel):
     inserted_rows: int
     updated_rows: int
     employees_created: int
+    skipped_manual_rows: int

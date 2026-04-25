@@ -9,10 +9,10 @@ from app.database.session import SessionLocal
 from app.models.swap_history import SwapHistory
 from app.repositories.employee_repo import EmployeeRepository
 from app.repositories.request_repo import RequestRepository
-from app.repositories.swap_repo import SwapRepository
 from app.repositories.timetable_repo import TimetableRepository
 from app.services.notification_service import NotificationService
 from app.utils.whatsapp_redirect import build_whatsapp_link
+from app.utils.validators import canonicalize_shift_name
 
 logger = logging.getLogger(__name__)
 
@@ -20,58 +20,65 @@ logger = logging.getLogger(__name__)
 class SwapService:
     def __init__(self, db: Session):
         self.db = db
-        self.swap_repo = SwapRepository(db)
         self.request_repo = RequestRepository(db)
         self.employee_repo = EmployeeRepository(db)
         self.timetable_repo = TimetableRepository(db)
         self.notification = NotificationService()
 
-    def create_request(self, requester, my_intent_id: int, other_intent_id: int, expires_in_minutes: int):
-        my_intent = self.swap_repo.get_by_id(my_intent_id)
-        other_intent = self.swap_repo.get_by_id(other_intent_id)
-        
-        if not my_intent:
-            raise ValidationException("Your swap request is no longer valid. Please search again.")
-        if not other_intent:
-            raise ValidationException("The other person is no longer available for swap. They may have accepted another request.")
-        
-        if my_intent.employee_id != requester.id:
-            raise ValidationException("my_intent_id does not belong to current employee")
-        if other_intent.employee_id == requester.id:
+    def create_request(
+        self,
+        requester,
+        receiver_employee_id: str,
+        swap_type: str,
+        target_date,
+        requester_current_shift: str,
+        receiver_current_shift: str,
+        expires_in_minutes: int,
+    ):
+        receiver = self.employee_repo.get_by_employee_id(receiver_employee_id)
+        if receiver is None:
+            raise ValidationException("The other person is no longer available for swap.")
+        if not receiver.is_active:
+            raise ValidationException("The other person is not active.")
+        if receiver.id == requester.id:
             raise ValidationException("Cannot send request to self")
-        
-        if my_intent.status != "OPEN":
-            raise ValidationException("Your swap request is no longer active. Please search again.")
-        if other_intent.status != "OPEN":
-            raise ValidationException("The other person is no longer available. They may have accepted another swap.")
 
-        if my_intent.swap_type != other_intent.swap_type:
-            raise ValidationException("Intent swap types do not match")
-        if self.request_repo.has_active_pair(my_intent.id, other_intent.id):
+        requester_row = self.timetable_repo.get_shift(requester.id, target_date)
+        receiver_row = self.timetable_repo.get_shift(receiver.id, target_date)
+        if requester_row is None or receiver_row is None:
+            raise ValidationException("Swap candidate is no longer available for the selected date.")
+
+        actual_requester_shift = canonicalize_shift_name(requester_row.shift_name)
+        actual_receiver_shift = canonicalize_shift_name(receiver_row.shift_name)
+        expected_requester_shift = canonicalize_shift_name(requester_current_shift)
+        expected_receiver_shift = canonicalize_shift_name(receiver_current_shift)
+
+        if actual_requester_shift != expected_requester_shift:
+            raise ValidationException("Your timetable changed. Please search again.")
+        if actual_receiver_shift != expected_receiver_shift:
+            raise ValidationException("The other person's timetable changed. Please search again.")
+
+        if self.request_repo.has_active_pair(requester.id, receiver.id, target_date, target_date):
             raise ValidationException("A pending request already exists for this swap pair")
-        if self.request_repo.has_active_for_intent(my_intent.id):
-            raise ValidationException("Your slot already has a pending swap request")
-        if self.request_repo.has_active_for_intent(other_intent.id):
-            raise ValidationException("The other person's slot already has a pending swap request")
-
-        start_date, end_date = self._derive_date_range(my_intent)
+        if self.request_repo.has_active_for_employee_on_date(requester.id, target_date):
+            raise ValidationException("You already have a pending swap request for this date")
+        if self.request_repo.has_active_for_employee_on_date(receiver.id, target_date):
+            raise ValidationException("The other person already has a pending swap request for this date")
 
         req = self.request_repo.create(
             requester_id=requester.id,
-            receiver_id=other_intent.employee_id,
-            requester_intent_id=my_intent.id,
-            receiver_intent_id=other_intent.id,
-            swap_type=my_intent.swap_type,
-            start_date=start_date,
-            end_date=end_date,
+            receiver_id=receiver.id,
+            swap_type=swap_type,
+            start_date=target_date,
+            end_date=target_date,
+            requester_shift=actual_requester_shift,
+            receiver_shift=actual_receiver_shift,
             status="PENDING",
             expires_at=datetime.now(timezone.utc).replace(tzinfo=None)
             + timedelta(minutes=expires_in_minutes),
         )
 
-        receiver = self.employee_repo.get_by_pk(other_intent.employee_id)
-        if receiver:
-            self.notification.notify_swap_request(receiver, req.id)
+        self.notification.notify_swap_request(receiver, req.id)
 
         self.db.commit()
         self.db.refresh(req)
@@ -104,21 +111,11 @@ class SwapService:
         if normalized != "ACCEPT":
             raise ValidationException("Decision must be ACCEPT or REJECT")
 
-        requester_intent = self.swap_repo.get_by_id(req.requester_intent_id)
-        receiver_intent = self.swap_repo.get_by_id(req.receiver_intent_id)
-        if requester_intent is None or receiver_intent is None:
-            raise ValidationException("Intents not found for request")
-        if requester_intent.status != "OPEN" or receiver_intent.status != "OPEN":
-            raise ValidationException("One of the swap slots is no longer available")
-
-        self._apply_schedule_swap(req, requester_intent, receiver_intent)
+        self._apply_schedule_swap(req)
 
         req.status = "ACCEPTED"
         req.responded_at = now_utc
         self.db.add(req)
-
-        self.swap_repo.close_intent(requester_intent)
-        self.swap_repo.close_intent(receiver_intent)
 
         history = SwapHistory(
             request_id=req.id,
@@ -151,44 +148,26 @@ class SwapService:
         now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
         return self.request_repo.list_pending_inbox(employee_pk, now_utc)
 
-    def _derive_date_range(self, intent):
-        if intent.swap_type in {"DAILY", "HOLIDAY"}:
-            date_obj = intent.target_date
-            return date_obj, date_obj
+    def _apply_schedule_swap(self, req):
+        d = req.start_date
+        requester_row = self.timetable_repo.get_shift(req.requester_id, d)
+        receiver_row = self.timetable_repo.get_shift(req.receiver_id, d)
+        if requester_row is None or receiver_row is None:
+            raise ValidationException("Shift row missing for one employee")
 
-        dates = sorted(intent.current_payload.get("days", {}).keys())
-        return datetime.fromisoformat(dates[0]).date(), datetime.fromisoformat(dates[-1]).date()
+        current_requester_shift = canonicalize_shift_name(requester_row.shift_name)
+        current_receiver_shift = canonicalize_shift_name(receiver_row.shift_name)
+        if current_requester_shift != canonicalize_shift_name(req.requester_shift):
+            raise ValidationException("Requester's shift changed before approval")
+        if current_receiver_shift != canonicalize_shift_name(req.receiver_shift):
+            raise ValidationException("Receiver's shift changed before approval")
 
-    def _apply_schedule_swap(self, req, requester_intent, receiver_intent):
-        if req.swap_type in {"DAILY", "HOLIDAY"}:
-            d = req.start_date
-            requester_row = self.timetable_repo.get_shift(req.requester_id, d)
-            receiver_row = self.timetable_repo.get_shift(req.receiver_id, d)
-            if requester_row is None or receiver_row is None:
-                raise ValidationException("Shift row missing for one employee")
-            requester_row.shift_name, receiver_row.shift_name = (
-                receiver_row.shift_name,
-                requester_row.shift_name,
-            )
-            self.db.add(requester_row)
-            self.db.add(receiver_row)
-            return
-
-        requester_days = requester_intent.current_payload.get("days", {})
-        receiver_days = receiver_intent.current_payload.get("days", {})
-
-        for day in sorted(requester_days.keys()):
-            date_obj = datetime.fromisoformat(day).date()
-            requester_row = self.timetable_repo.get_shift(req.requester_id, date_obj)
-            receiver_row = self.timetable_repo.get_shift(req.receiver_id, date_obj)
-            if requester_row is None or receiver_row is None:
-                raise ValidationException(f"Missing timetable row on {day}")
-            requester_row.shift_name, receiver_row.shift_name = (
-                receiver_row.shift_name,
-                requester_row.shift_name,
-            )
-            self.db.add(requester_row)
-            self.db.add(receiver_row)
+        requester_row.shift_name, receiver_row.shift_name = (
+            receiver_row.shift_name,
+            requester_row.shift_name,
+        )
+        self.db.add(requester_row)
+        self.db.add(receiver_row)
 
 
 def expire_pending_requests_job() -> None:

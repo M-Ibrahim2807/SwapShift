@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.admin.upload_timetable import router as admin_router
+from app.api.coverback import router as coverback_router
 from app.api.employee.login import router as login_router
 from app.api.employee.register import router as register_router
 from app.api.employee.timetable import router as timetable_router
@@ -20,3 +21,5 @@ api_router.include_router(find_swap_router, prefix="/swap", tags=["Swap"])
 api_router.include_router(request_swap_router, prefix="/swap", tags=["Swap"])
 api_router.include_router(accept_reject_router, prefix="/swap", tags=["Swap"])
 api_router.include_router(swap_history_router, prefix="/swap", tags=["Swap"])
+
+api_router.include_router(coverback_router, prefix="/coverback", tags=["Coverback"])

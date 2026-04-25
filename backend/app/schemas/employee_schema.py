@@ -32,6 +32,8 @@ class TokenOut(BaseModel):
 
 
 class EmployeeOut(BaseModel):
+    name: str | None = None
+    supervisor_name: str | None = None
     employee_id: str
     contact_number: str
     is_active: bool
@@ -39,3 +41,8 @@ class EmployeeOut(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class DeleteEmployeeOut(BaseModel):
+    employee_id: str
+    message: str

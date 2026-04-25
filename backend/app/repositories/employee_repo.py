@@ -14,14 +14,17 @@ class EmployeeRepository:
     def get_by_pk(self, pk: int) -> Employee | None:
         return self.db.scalar(select(Employee).where(Employee.id == pk))
 
-    def create(self, employee_id: str, contact_number: str, contact_hash: str, name: str = None) -> Employee:
+    def create(self, employee_id: str, contact_number: str, contact_hash: str, name: str = None,
+                supervisor_name: str = None,
+                registration_status="PENDING") -> Employee:
         employee = Employee(
             employee_id=employee_id,
             name=name,
+            supervisor_name=supervisor_name,
             contact_number=contact_number,
             contact_hash=contact_hash,
             is_active=False,
-            registration_status="PENDING",
+            registration_status=registration_status,
         )
         self.db.add(employee)
         self.db.flush()
@@ -30,7 +33,15 @@ class EmployeeRepository:
     def list_pending(self) -> list[Employee]:
         return list(self.db.scalars(select(Employee).where(Employee.registration_status == "PENDING")))
 
+    def list_all(self) -> list[Employee]:
+        stmt = select(Employee).order_by(Employee.created_at.desc(), Employee.employee_id.asc())
+        return list(self.db.scalars(stmt))
+
     def save(self, employee: Employee) -> Employee:
         self.db.add(employee)
         self.db.flush()
         return employee
+
+    def delete(self, employee: Employee) -> None:
+        self.db.delete(employee)
+        self.db.flush()

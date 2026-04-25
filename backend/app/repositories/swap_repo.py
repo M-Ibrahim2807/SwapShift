@@ -1,6 +1,6 @@
 from datetime import date
 
-from sqlalchemy import and_, select
+from sqlalchemy import and_, delete, select
 from sqlalchemy.orm import Session
 
 from app.models.swap import SwapIntent

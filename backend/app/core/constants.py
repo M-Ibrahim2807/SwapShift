@@ -30,3 +30,19 @@ class SwapRequestStatus(str, Enum):
 class IntentStatus(str, Enum):
     OPEN = "OPEN"
     CLOSED = "CLOSED"
+
+
+class TimetableSource(str, Enum):
+    ADMIN = "ADMIN"
+    MANUAL = "MANUAL"
+
+
+class CoverbackType(str, Enum):
+    OFFER = "OFFER"
+    FIND = "FIND"
+
+
+class CoverbackStatus(str, Enum):
+    OPEN = "OPEN"
+    CLOSED = "CLOSED"
+    CANCELLED = "CANCELLED"

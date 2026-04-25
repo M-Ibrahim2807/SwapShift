@@ -3,6 +3,7 @@ from datetime import date, datetime
 from sqlalchemy import Date, DateTime, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.core.constants import TimetableSource
 from app.database.base import Base
 
 
@@ -14,6 +15,7 @@ class Timetable(Base):
     employee_id: Mapped[int] = mapped_column(Integer, ForeignKey("employees.id"), nullable=False, index=True)
     work_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     shift_name: Mapped[str] = mapped_column(String(20), nullable=False)
+    source: Mapped[str] = mapped_column(String(20), default=TimetableSource.ADMIN.value, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     employee = relationship("Employee", back_populates="timetables")

@@ -5,7 +5,7 @@ from datetime import date
 from app.core.exceptions import ValidationException
 from app.dependencies import get_current_employee, get_db
 from app.models.employee import Employee
-from app.schemas.timetable_schema import TimetableWeekOut
+from app.schemas.timetable_schema import ManualTimetableUpsertIn, TimetableStateOut
 from app.services.timetable_service import TimetableService
 from pydantic import BaseModel
 
@@ -25,16 +25,26 @@ class EmployeeSummaryOut(BaseModel):
     off_days: int
 
 
-@router.get("/timetable", response_model=TimetableWeekOut)
+@router.get("/timetable", response_model=TimetableStateOut)
 async def get_current_week_timetable(
     db: Session = Depends(get_db),
     employee: Employee = Depends(get_current_employee),
 ):
     service = TimetableService(db)
+    return service.get_current_week_for_employee(employee)
+
+
+@router.put("/timetable", response_model=TimetableStateOut)
+async def upsert_manual_timetable(
+    payload: ManualTimetableUpsertIn,
+    db: Session = Depends(get_db),
+    employee: Employee = Depends(get_current_employee),
+):
+    service = TimetableService(db)
     try:
-        return service.get_current_week_for_employee(employee)
+        return service.upsert_manual_timetable_for_employee(employee, payload)
     except ValidationException as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 @router.get("/timetable/available-shifts/{work_date}", response_model=AvailableShiftsOut)
@@ -48,6 +58,7 @@ async def get_available_shifts_for_date(
     """
     service = TimetableService(db)
     try:
+        service.ensure_timetable_exists(employee)
         available_shifts = service.get_available_shifts_for_date(employee, work_date)
         return AvailableShiftsOut(date=work_date, shifts=available_shifts)
     except ValidationException as exc:

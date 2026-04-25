@@ -20,8 +20,11 @@ async def request_swap(
     try:
         return service.create_request(
             requester=employee,
-            my_intent_id=payload.my_intent_id,
-            other_intent_id=payload.other_intent_id,
+            receiver_employee_id=payload.receiver_employee_id,
+            swap_type=payload.swap_type,
+            target_date=payload.target_date,
+            requester_current_shift=payload.requester_current_shift,
+            receiver_current_shift=payload.receiver_current_shift,
             expires_in_minutes=payload.expires_in_minutes,
         )
     except ValidationException as exc:

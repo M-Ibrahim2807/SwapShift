@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, delete, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.shift_request import ShiftRequest
@@ -35,23 +35,33 @@ class RequestRepository:
         )
         return list(self.db.scalars(stmt))
 
-    def has_active_pair(self, requester_intent_id: int, receiver_intent_id: int) -> bool:
+    def has_active_pair(
+        self,
+        requester_id: int,
+        receiver_id: int,
+        start_date,
+        end_date,
+    ) -> bool:
         stmt = select(ShiftRequest).where(
             and_(
-                ShiftRequest.requester_intent_id == requester_intent_id,
-                ShiftRequest.receiver_intent_id == receiver_intent_id,
+                ShiftRequest.requester_id == requester_id,
+                ShiftRequest.receiver_id == receiver_id,
+                ShiftRequest.start_date == start_date,
+                ShiftRequest.end_date == end_date,
                 ShiftRequest.status == "PENDING",
             )
         )
         return self.db.scalar(stmt) is not None
 
-    def has_active_for_intent(self, intent_id: int) -> bool:
+    def has_active_for_employee_on_date(self, employee_id: int, target_date) -> bool:
         stmt = select(ShiftRequest).where(
             and_(
                 or_(
-                    ShiftRequest.requester_intent_id == intent_id,
-                    ShiftRequest.receiver_intent_id == intent_id,
+                    ShiftRequest.requester_id == employee_id,
+                    ShiftRequest.receiver_id == employee_id,
                 ),
+                ShiftRequest.start_date == target_date,
+                ShiftRequest.end_date == target_date,
                 ShiftRequest.status == "PENDING",
             )
         )
@@ -68,3 +78,11 @@ class RequestRepository:
             self.db.add(row)
         self.db.flush()
         return len(rows)
+
+    def delete_all_for_employee(self, employee_pk: int) -> None:
+        self.db.execute(
+            delete(ShiftRequest).where(
+                or_(ShiftRequest.requester_id == employee_pk, ShiftRequest.receiver_id == employee_pk)
+            )
+        )
+        self.db.flush()

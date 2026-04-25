@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.core.exceptions import AuthException, ValidationException
 from app.dependencies import get_current_admin, get_db
-from app.schemas.employee_schema import AdminLoginIn, EmployeeOut, TokenOut
+from app.schemas.employee_schema import AdminLoginIn, DeleteEmployeeOut, EmployeeOut, TokenOut
 from app.schemas.timetable_schema import UploadResultOut
 from app.services.auth_service import AuthService
 from app.services.employee_service import EmployeeService
@@ -44,6 +44,12 @@ async def list_pending_registrations(_: dict = Depends(get_current_admin), db: S
     return service.list_pending_registrations()
 
 
+@router.get("/employees", response_model=list[EmployeeOut])
+async def list_all_employees(_: dict = Depends(get_current_admin), db: Session = Depends(get_db)):
+    service = EmployeeService(db)
+    return service.list_all_employees()
+
+
 @router.post("/registration-requests/{employee_id}/approve", response_model=EmployeeOut)
 async def approve_registration(employee_id: str, _: dict = Depends(get_current_admin), db: Session = Depends(get_db)):
     service = EmployeeService(db)
@@ -58,5 +64,14 @@ async def reject_registration(employee_id: str, _: dict = Depends(get_current_ad
     service = EmployeeService(db)
     try:
         return service.reject_registration(employee_id)
+    except ValidationException as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.delete("/employees/{employee_id}", response_model=DeleteEmployeeOut)
+async def delete_employee(employee_id: str, _: dict = Depends(get_current_admin), db: Session = Depends(get_db)):
+    service = EmployeeService(db)
+    try:
+        return service.delete_employee(employee_id)
     except ValidationException as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc

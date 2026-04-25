@@ -1,11 +1,10 @@
+import csv
 import os
 from contextlib import asynccontextmanager
 from datetime import date, timedelta
-from io import BytesIO
+from io import StringIO
 from pathlib import Path
 
-from openpyxl import Workbook
-from openpyxl.utils.datetime import to_excel
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -24,45 +23,44 @@ os.environ["LOG_LEVEL"] = "INFO"
 from app.database.base import Base
 from app.dependencies import get_db
 from app.main import app
-from app.models import employee, shift_request, swap, swap_history, timetable  # noqa: F401
+from app.models import coverback, employee, shift_request, swap, swap_history, timetable  # noqa: F401
 
 engine = create_engine(os.environ["DATABASE_URL"], connect_args={"check_same_thread": False})
 TestingSessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
 
 def build_schedule_workbook(employee_schedules: dict[str, list[str]], start_date: date) -> bytes:
-    workbook = Workbook()
-    sheet = workbook.active
-    sheet.title = "WM DGT LHE WS_TEST"
-    sheet["H1"] = "CST"
-    sheet["P1"] = "PKST"
-    sheet["A2"] = "EMP ID"
-    sheet["B2"] = "Site"
-    sheet["C2"] = "Name"
-    sheet["D2"] = "Queue"
-    sheet["E2"] = "Supervisor"
-    sheet["F2"] = "CT"
-    sheet["G2"] = "Batch"
+    buffer = StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(["generated"])
+    writer.writerow(
+        [
+            "EMP ID",
+            "Site",
+            "Name",
+            "Queue",
+            "Supervisor",
+            "CT",
+            "Batch",
+            *[(start_date + timedelta(days=offset)).strftime("%d %b") for offset in range(7)],
+        ]
+    )
 
-    for offset, column in enumerate("PQRSTUV"):
-        sheet[f"{column}2"] = to_excel(start_date + timedelta(days=offset))
-
-    row_number = 3
     for employee_id, shifts in employee_schedules.items():
-        sheet[f"A{row_number}"] = employee_id
-        sheet[f"B{row_number}"] = "LHE"
-        sheet[f"C{row_number}"] = f"Employee {employee_id}"
-        sheet[f"D{row_number}"] = "GM Voice"
-        sheet[f"E{row_number}"] = "Supervisor"
-        sheet[f"F{row_number}"] = "YES"
-        sheet[f"G{row_number}"] = "Batch 1"
-        for offset, column in enumerate("PQRSTUV"):
-            sheet[f"{column}{row_number}"] = shifts[offset]
-        row_number += 1
+        writer.writerow(
+            [
+                employee_id,
+                "LHE",
+                f"Employee {employee_id}",
+                "GM Voice",
+                "Supervisor",
+                "YES",
+                "Batch 1",
+                *shifts,
+            ]
+        )
 
-    buffer = BytesIO()
-    workbook.save(buffer)
-    return buffer.getvalue()
+    return buffer.getvalue().encode("utf-8")
 
 
 @pytest.fixture(autouse=True)

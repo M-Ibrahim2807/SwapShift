@@ -49,31 +49,33 @@ class FindSwapIn(BaseModel):
 
 class MatchCandidateOut(BaseModel):
     employee_id: str
+    name: str | None = None
     contact_number: str
-    my_current_payload: dict
-    my_wanted_payload: dict
-    other_current_payload: dict
-    other_wanted_payload: dict
-    other_intent_id: int
+    target_date: date
+    swap_type: str
+    requester_current_shift: str
+    requester_wanted_shift: str
+    candidate_current_shift: str
 
 
 class DailyMatchGroupOut(BaseModel):
     date: date
-    my_intent_id: int
     my_current_shift: str
     my_wanted_shift: str
     matches: list[MatchCandidateOut]
 
 
 class FindSwapOut(BaseModel):
-    my_intent_id: int | None = None
     matches: list[MatchCandidateOut] = []
     matches_by_date: list[DailyMatchGroupOut] | None = None
 
 
 class CreateRequestIn(BaseModel):
-    my_intent_id: int
-    other_intent_id: int
+    receiver_employee_id: str
+    swap_type: SwapTypeLiteral
+    target_date: date
+    requester_current_shift: str
+    receiver_current_shift: str
     expires_in_minutes: int = Field(default=360, ge=5, le=1440)
 
 
