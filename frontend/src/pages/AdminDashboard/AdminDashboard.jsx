@@ -7,6 +7,7 @@ import { getPendingRegistrations } from '../../services/api';
 import RegistrationsTab from './tabs/RegistrationsTab';
 import UploadTimetableTab from './tabs/UploadTimetableTab';
 import SwapOverviewTab from './tabs/SwapOverviewTab';
+import EmployeesTab from './tabs/EmployeesTab';
 import './AdminDashboard.css';
 
 export default function AdminDashboard() {
@@ -65,6 +66,19 @@ export default function AdminDashboard() {
           >
             Swap Overview
           </button>
+          <button
+            className={`tab-button ${activeTab === 'employees' ? 'active' : ''}`}
+            onClick={() => setActiveTab('employees')}
+          >
+            Employees
+          </button>
+          <button
+            className="tab-button"
+            onClick={logout}
+            style={{ marginLeft: 'auto' }}
+          >
+            Logout
+          </button>
         </div>
 
         <div className="tab-content">
@@ -76,6 +90,7 @@ export default function AdminDashboard() {
           )}
           {activeTab === 'upload' && <UploadTimetableTab showToast={showToast} />}
           {activeTab === 'overview' && <SwapOverviewTab showToast={showToast} />}
+          {activeTab === 'employees' && <EmployeesTab showToast={showToast} />}
         </div>
       </div>
     </>

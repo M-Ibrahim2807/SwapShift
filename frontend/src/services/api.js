@@ -56,11 +56,17 @@ export const uploadTimetable = (formData) =>
 export const getPendingRegistrations = () =>
   api.get('/api/v1/admin/registration-requests');
 
+export const getAllEmployees = () =>
+  api.get('/api/v1/admin/employees');
+
 export const approveRegistration = (employee_id) =>
   api.post(`/api/v1/admin/registration-requests/${employee_id}/approve`);
 
 export const rejectRegistration = (employee_id) =>
   api.post(`/api/v1/admin/registration-requests/${employee_id}/reject`);
+
+export const deleteEmployee = (employee_id) =>
+  api.delete(`/api/v1/admin/employees/${employee_id}`);
 
 // SWAP APIs
 export const findSwap = (data) =>
@@ -78,9 +84,23 @@ export const getSwapHistory = () =>
 export const getSwapInbox = () =>
   api.get('/api/v1/swap/inbox');
 
+// COVERBACK APIs
+export const createCoverback = (data) =>
+  api.post('/api/v1/coverback', data);
+
+export const getCoverbackAlerts = (targetDate) =>
+  api.get('/api/v1/coverback/alerts', {
+    params: targetDate ? { target_date: targetDate } : {},
+  });
+
+export const getMyCoverbackPosts = () =>
+  api.get('/api/v1/coverback/mine');
+
+export const cancelCoverback = (postId) =>
+  api.post(`/api/v1/coverback/${postId}/cancel`);
+
 // HEALTH
 export const checkHealth = () =>
   api.get('/health');
 
 export default api;
-

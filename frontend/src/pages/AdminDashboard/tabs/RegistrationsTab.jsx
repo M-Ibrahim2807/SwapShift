@@ -105,6 +105,12 @@ export default function RegistrationsTab({ showToast, onCountChange }) {
               </div>
               <div>
                 <span style={{ color: 'var(--color-text-muted)', display: 'block', marginBottom: '4px' }}>
+                  Supervisor
+                </span>
+                <span style={{ fontWeight: 500 }}>{emp.supervisor_name || 'N/A'}</span>
+              </div>
+              <div>
+                <span style={{ color: 'var(--color-text-muted)', display: 'block', marginBottom: '4px' }}>
                   Status
                 </span>
                 <span style={{ fontWeight: 500 }}>{emp.registration_status}</span>

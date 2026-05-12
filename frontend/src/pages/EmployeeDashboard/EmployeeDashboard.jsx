@@ -31,12 +31,13 @@ import {
 } from '../../services/api';
 import { useNotifications } from '../../hooks/useNotifications';
 import LoadingSpinner from '../../components/LoadingSpinner/LoadingSpinner';
+import CoverbacksTab from './tabs/CoverbacksTab';
 import { adjustTimeForPKST } from '../../utils/timeUtils';
 import './EmployeeDashboard.css';
 
 export default function EmployeeDashboard() {
   const navigate = useNavigate();
-  const { token, role, user } = useAuth();
+  const { token, role, user, logout } = useAuth();
   const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState('home');
   const [timetable, setTimetable] = useState(null);
@@ -145,7 +146,6 @@ export default function EmployeeDashboard() {
       try {
         const inboxRes = await getSwapInbox();
         const inboxItems = Array.isArray(inboxRes.data) ? inboxRes.data : [];
-        previousInboxCountRef.current = inboxItems.length;
         setSwapInbox(inboxItems);
       } catch (err) {
         // Silently fail if inbox endpoint is unavailable.
@@ -261,6 +261,7 @@ export default function EmployeeDashboard() {
             getAvailableShiftsAction={getAvailableShifts}
           />
         )}
+        {activeTab === 'coverbacks' && <CoverbacksTab showToast={showToast} />}
         {activeTab === 'inbox' && (
           <InboxView
             swapInbox={swapInbox}
@@ -290,12 +291,30 @@ export default function EmployeeDashboard() {
           </span>
           <span className="nav-label">Swap</span>
         </button>
+        <button className={`nav-item ${activeTab === 'coverbacks' ? 'active' : ''}`} onClick={() => setActiveTab('coverbacks')}>
+          <span className="nav-icon">
+            <HeartHandshake size={20} />
+          </span>
+          <span className="nav-label">Coverbacks</span>
+        </button>
         <button className={`nav-item ${activeTab === 'inbox' ? 'active' : ''}`} onClick={() => setActiveTab('inbox')}>
           <span className="nav-icon">
             <BellRing size={20} />
           </span>
           <span className="nav-label">Alerts</span>
           {swapInbox.length > 0 && <span className="badge-small">{swapInbox.length}</span>}
+        </button>
+        <button className="nav-item" onClick={() => navigate('/')}>
+          <span className="nav-icon">
+            <House size={20} />
+          </span>
+          <span className="nav-label">Home</span>
+        </button>
+        <button className="nav-item" onClick={logout}>
+          <span className="nav-icon">
+            <X size={20} />
+          </span>
+          <span className="nav-label">Logout</span>
         </button>
       </div>
     </div>
@@ -343,7 +362,6 @@ function FindSwapView({
   const [results, setResults] = React.useState([]);
   const [searched, setSearched] = React.useState(false);
   const [requestingId, setRequestingId] = React.useState(null);
-  const [myIntentId, setMyIntentId] = React.useState(null);
   const [availableShifts, setAvailableShifts] = React.useState([]);
   const [fetchingShifts, setFetchingShifts] = React.useState(false);
   const [requestSent, setRequestSent] = React.useState(false);
@@ -431,7 +449,6 @@ function FindSwapView({
           wanted_meridiem: 'OFF',
         });
 
-        setMyIntentId(response.data.my_intent_id);
         setResults(Array.isArray(response.data.matches) ? response.data.matches : []);
         setSearched(true);
       } else {
@@ -449,7 +466,6 @@ function FindSwapView({
           wanted_meridiem: shiftMatch[3],
         });
 
-        setMyIntentId(response.data.my_intent_id);
         setResults(Array.isArray(response.data.matches) ? response.data.matches : []);
         setSearched(true);
       }
@@ -469,31 +485,29 @@ function FindSwapView({
     }
   };
 
-  const handleRequestSwap = async (otherIntentId, matchEmployee, matchContact) => {
-    if (!myIntentId) {
-      showToast('Please search again - your intent was not created', 'warning');
-      return;
-    }
-
-    if (!otherIntentId) {
-      showToast('Invalid request - other person intent not found', 'warning');
+  const handleRequestSwap = async (candidate) => {
+    if (!candidate?.employee_id) {
+      showToast('Invalid request - receiver employee is missing', 'warning');
       return;
     }
 
     try {
-      setRequestingId(otherIntentId);
+      setRequestingId(candidate.employee_id);
       await requestSwapAction({
-        my_intent_id: myIntentId,
-        other_intent_id: otherIntentId,
+        receiver_employee_id: candidate.employee_id,
+        swap_type: candidate.swap_type,
+        target_date: candidate.target_date,
+        requester_current_shift: candidate.requester_current_shift,
+        receiver_current_shift: candidate.candidate_current_shift,
         expires_in_minutes: 360,
       });
 
-      const whatsappLink = buildWhatsAppLink(matchContact);
+      const whatsappLink = buildWhatsAppLink(candidate.contact_number);
       setRequestSent(true);
-      setSentToEmployee(matchEmployee);
-      setSentToContact(matchContact || 'Not available');
+      setSentToEmployee(candidate.name || candidate.employee_id);
+      setSentToContact(candidate.contact_number || 'Not available');
       setSentToWhatsappLink(whatsappLink);
-      setResults((prev) => prev.filter((item) => item.other_intent_id !== otherIntentId));
+      setResults((prev) => prev.filter((item) => item.employee_id !== candidate.employee_id));
     } catch (err) {
       let errorDetail = 'Request failed';
       if (err.response?.data?.detail) {
@@ -638,11 +652,13 @@ function FindSwapView({
           <div className="swap-results" style={{ marginTop: '16px' }}>
             {!loading && results.length > 0 && (
               <div className="results-list">
-                {results.map((match) => (
-                  <div key={match.other_intent_id} className="match-card">
+                {results.map((match, idx) => (
+                  <div key={`${match.employee_id}-${match.target_date}-${idx}`} className="match-card">
                     <div className="match-info">
-                      <p className="match-name">{match.employee_id}</p>
+                      <p className="match-name">{match.name || match.employee_id}</p>
+                      <p className="match-contact">Employee ID: {match.employee_id}</p>
                       <p className="match-contact">{match.contact_number}</p>
+                      <p className="match-contact">Shift: {adjustTimeForPKST(match.candidate_current_shift)}</p>
                       {wantedShift.toUpperCase().includes('OFF') && (
                         <p style={{ fontSize: '13px', color: '#28a745', fontWeight: '500', marginTop: '4px' }}>
                           <HeartHandshake size={14} style={{ marginRight: '6px', verticalAlign: 'text-bottom' }} />
@@ -651,11 +667,11 @@ function FindSwapView({
                       )}
                     </div>
                     <button
-                      onClick={() => handleRequestSwap(match.other_intent_id, match.employee_id, match.contact_number)}
-                      disabled={requestingId === match.other_intent_id}
+                      onClick={() => handleRequestSwap(match)}
+                      disabled={requestingId === match.employee_id}
                       className="request-button"
                     >
-                      {requestingId === match.other_intent_id ? 'Requesting...' : 'Request'}
+                      {requestingId === match.employee_id ? 'Requesting...' : 'Request'}
                     </button>
                   </div>
                 ))}
@@ -667,12 +683,9 @@ function FindSwapView({
         {searched && !loading && results.length === 0 && (
           <div className="no-results" style={{ marginTop: '16px' }}>
             <p style={{ fontSize: '16px', fontWeight: '500', marginBottom: '8px' }}>
-              <CheckCircle2 size={18} style={{ marginRight: '8px', verticalAlign: 'text-bottom' }} />
-              Your intent has been recorded
+              No swap candidates found for this shift/date.
             </p>
-            <p style={{ fontSize: '14px', color: 'var(--color-text-muted)' }}>
-              We will notify you shortly if someone wants your shift
-            </p>
+            <p style={{ fontSize: '14px', color: 'var(--color-text-muted)' }}>Try another date or shift.</p>
           </div>
         )}
 
@@ -705,8 +718,17 @@ function InboxView({ swapInbox, showToast, onRemoveAlert, onSwapCompleted }) {
   const handleSwapAccept = async (requestId) => {
     try {
       setProcessingId(requestId);
-      await decideSwap(requestId, 'ACCEPT');
+      const response = await decideSwap(requestId, 'ACCEPT');
       showToast('Swap accepted! Shifts have been swapped.', 'success');
+      const requesterWhatsApp = response?.data?.requester_whatsapp;
+      const receiverWhatsApp = response?.data?.receiver_whatsapp;
+      if (requesterWhatsApp || receiverWhatsApp) {
+        const url = requesterWhatsApp || receiverWhatsApp;
+        const openNow = window.confirm('Swap successful. Open WhatsApp redirect link now?');
+        if (openNow) {
+          window.open(url, '_blank', 'noopener,noreferrer');
+        }
+      }
       onRemoveAlert(requestId);
       if (onSwapCompleted) {
         await onSwapCompleted();
