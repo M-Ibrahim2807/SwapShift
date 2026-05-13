@@ -14,6 +14,12 @@ class EmployeeRepository:
     def get_by_pk(self, pk: int) -> Employee | None:
         return self.db.scalar(select(Employee).where(Employee.id == pk))
 
+    def get_by_employee_ids(self, employee_ids: list[str]) -> list[Employee]:
+        if not employee_ids:
+            return []
+        stmt = select(Employee).where(Employee.employee_id.in_(employee_ids))
+        return list(self.db.scalars(stmt))
+
     def create(self, employee_id: str, contact_number: str, contact_hash: str, name: str = None,
                 supervisor_name: str = None,
                 registration_status="PENDING") -> Employee:
@@ -45,3 +51,12 @@ class EmployeeRepository:
     def delete(self, employee: Employee) -> None:
         self.db.delete(employee)
         self.db.flush()
+
+    def bulk_create(self, employee_payloads: list[dict]) -> list[Employee]:
+        created: list[Employee] = []
+        for payload in employee_payloads:
+            employee = Employee(**payload)
+            self.db.add(employee)
+            created.append(employee)
+        self.db.flush()
+        return created

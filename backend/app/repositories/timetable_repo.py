@@ -82,3 +82,20 @@ class TimetableRepository:
         """Get all timetable rows for a specific date across all employees."""
         stmt = select(Timetable).where(Timetable.work_date == work_date)
         return list(self.db.scalars(stmt))
+
+    def get_manual_employee_ids(self, employee_ids: list[int]) -> set[int]:
+        if not employee_ids:
+            return set()
+        stmt = select(Timetable.employee_id).where(
+            and_(
+                Timetable.employee_id.in_(employee_ids),
+                Timetable.source == TimetableSource.MANUAL.value,
+            )
+        )
+        return set(self.db.scalars(stmt))
+
+    def bulk_insert_rows(self, rows: list[dict]) -> None:
+        if not rows:
+            return
+        self.db.bulk_insert_mappings(Timetable, rows)
+        self.db.flush()

@@ -32,39 +32,72 @@ class TimetableService:
         employees_created = 0
         skipped_manual_rows = 0
 
+        # Phase 1: Fetch/create employees in batch.
+        employee_ids = sorted({row["employee_id"] for row in rows})
+        existing_employees = self.employee_repo.get_by_employee_ids(employee_ids)
+        employee_by_id = {emp.employee_id: emp for emp in existing_employees}
+
+        missing_payloads: list[dict] = []
+        for emp_id in employee_ids:
+            if emp_id in employee_by_id:
+                continue
+            first_row = next((row for row in rows if row["employee_id"] == emp_id), None)
+            if first_row is None:
+                continue
+            missing_payloads.append(
+                {
+                    "employee_id": emp_id,
+                    "name": first_row.get("name") or None,
+                    "supervisor_name": first_row.get("supervisor") or None,
+                    "contact_number": first_row.get("contact_number") or "PENDING_FROM_TIMETABLE",
+                    "contact_hash": "TEMP_UNREGISTERED",
+                    "is_active": False,
+                    "registration_status": "APPROVED",
+                }
+            )
+
+        if missing_payloads:
+            created = self.employee_repo.bulk_create(missing_payloads)
+            for emp in created:
+                employee_by_id[emp.employee_id] = emp
+            employees_created = len(created)
+
+        # Phase 2: Determine manual-owned employees in one query.
+        employee_pks = [emp.id for emp in employee_by_id.values()]
+        manual_employee_ids = self.timetable_repo.get_manual_employee_ids(employee_pks)
+
+        # Phase 3: Build insert batch in memory while preserving existing behavior.
+        insert_row_by_key: dict[tuple[int, date], dict] = {}
         for row in rows:
-            emp = self.employee_repo.get_by_employee_id(row["employee_id"])
+            emp = employee_by_id.get(row["employee_id"])
             if emp is None:
-                emp = self.employee_repo.create(
-                    employee_id=row["employee_id"],
-                    name=row.get("name") or None,
-                    supervisor_name=row.get("supervisor") or None,
-                    contact_number=row["contact_number"] or "PENDING_FROM_TIMETABLE",
-                    contact_hash="TEMP_UNREGISTERED",
-                    registration_status="APPROVED"
-                )
-                employees_created += 1
-            elif self.timetable_repo.has_rows_with_source(emp.id, TimetableSource.MANUAL.value):
+                continue
+
+            if emp.id in manual_employee_ids:
                 skipped_manual_rows += 1
                 continue
-            else:
-                emp.name = row.get("name") or emp.name
-                emp.supervisor_name = row.get("supervisor") or emp.supervisor_name
-                self.employee_repo.save(emp)
 
-            _, action = self.timetable_repo.upsert_shift(
-                employee_pk=emp.id,
-                work_date=row["date"],
-                shift_name=normalize_shift_name(row["shift_name"]),
-                source=TimetableSource.ADMIN.value,
-                preserve_manual=True,
-            )
-            if action == "created":
-                inserted_rows += 1
-            elif action == "updated":
+            # Preserve old metadata update behavior for existing non-manual employees.
+            emp.name = row.get("name") or emp.name
+            emp.supervisor_name = row.get("supervisor") or emp.supervisor_name
+            self.db.add(emp)
+
+            key = (emp.id, row["date"])
+            payload = {
+                "employee_id": emp.id,
+                "work_date": row["date"],
+                "shift_name": normalize_shift_name(row["shift_name"]),
+                "source": TimetableSource.ADMIN.value,
+            }
+            if key in insert_row_by_key:
                 updated_rows += 1
-            elif action == "skipped":
-                skipped_manual_rows += 1
+            insert_row_by_key[key] = payload
+
+        # Because ADMIN rows are deleted first, all surviving rows are inserts.
+        insert_rows = list(insert_row_by_key.values())
+        if insert_rows:
+            self.timetable_repo.bulk_insert_rows(insert_rows)
+            inserted_rows = len(insert_rows)
 
         self.db.commit()
         return {
