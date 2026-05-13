@@ -99,10 +99,7 @@ class MatchingEngine:
                 continue
 
             emp = self.employee_repo.get_by_pk(row.employee_id)
-            if emp is None or not emp.is_active:
-                continue
-
-            if self.request_repo.has_active_for_employee_on_date(emp.id, target_date):
+            if emp is None:
                 continue
 
             seen_employee_ids.add(emp.id)

@@ -193,12 +193,72 @@ export default function EmployeeDashboard() {
   return (
     <div className="employee-dashboard">
       <div className="dashboard-header">
-        <div className="greeting-section">
-          <p className="greeting-text">
-            <GreetingIcon size={18} className="greeting-icon" />
-            <span>{greeting}</span>
-          </p>
-          <h1 className="user-name">{userName}</h1>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
+          <div className="greeting-section">
+            <p className="greeting-text">
+              <GreetingIcon size={18} className="greeting-icon" />
+              <span>{greeting}</span>
+            </p>
+            <h1 className="user-name">{userName}</h1>
+            <button
+              type="button"
+              onClick={() => setActiveTab('inbox')}
+              aria-label="Alerts"
+              style={{
+                position: 'relative',
+                width: '38px',
+                height: '38px',
+                marginTop: '10px',
+                borderRadius: '50%',
+                border: '1px solid var(--color-border)',
+                background: 'var(--color-white)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+              }}
+            >
+              <BellRing size={18} />
+              {swapInbox.length > 0 && (
+                <span
+                  style={{
+                    position: 'absolute',
+                    top: '-4px',
+                    right: '-4px',
+                    minWidth: '18px',
+                    height: '18px',
+                    borderRadius: '9px',
+                    background: 'var(--color-error)',
+                    color: '#fff',
+                    fontSize: '11px',
+                    lineHeight: '18px',
+                    textAlign: 'center',
+                    fontWeight: 700,
+                    padding: '0 4px',
+                  }}
+                >
+                  {swapInbox.length}
+                </span>
+              )}
+            </button>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '4px' }}>
+            <button
+              type="button"
+              onClick={logout}
+              style={{
+                padding: '8px 12px',
+                borderRadius: 'var(--border-radius-sm)',
+                border: '1px solid var(--color-border)',
+                background: 'var(--color-white)',
+                cursor: 'pointer',
+                fontSize: '13px',
+                fontWeight: 600,
+              }}
+            >
+              Logout
+            </button>
+          </div>
         </div>
       </div>
 
@@ -296,25 +356,6 @@ export default function EmployeeDashboard() {
             <HeartHandshake size={20} />
           </span>
           <span className="nav-label">Coverbacks</span>
-        </button>
-        <button className={`nav-item ${activeTab === 'inbox' ? 'active' : ''}`} onClick={() => setActiveTab('inbox')}>
-          <span className="nav-icon">
-            <BellRing size={20} />
-          </span>
-          <span className="nav-label">Alerts</span>
-          {swapInbox.length > 0 && <span className="badge-small">{swapInbox.length}</span>}
-        </button>
-        <button className="nav-item" onClick={() => navigate('/')}>
-          <span className="nav-icon">
-            <House size={20} />
-          </span>
-          <span className="nav-label">Home</span>
-        </button>
-        <button className="nav-item" onClick={logout}>
-          <span className="nav-icon">
-            <X size={20} />
-          </span>
-          <span className="nav-label">Logout</span>
         </button>
       </div>
     </div>
